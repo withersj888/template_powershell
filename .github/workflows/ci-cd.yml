@@ -137,11 +137,54 @@ jobs:
     - name: Publish Module to GitHub Packages
       shell: pwsh
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
       run: |
-        if ($env:NUGET_API_KEY) {
-          # Publish the module using NuGet API key
-          Publish-Module -Path './module' -Repository 'GitHubPackages' -NuGetApiKey $env:NUGET_API_KEY -Verbose
+        # Debug: Check what's in the module directory
+        Write-Host "📁 Contents of ./module directory:"
+        Get-ChildItem -Path './module' -Recurse | ForEach-Object {
+          Write-Host "  $($_.FullName)"
+        }
+        
+        # Find the module manifest file
+        $manifestPath = Get-ChildItem -Path './module' -Filter '*.psd1' -Recurse | Select-Object -First 1
+        if ($manifestPath) {
+          Write-Host "📦 Found module manifest: $($manifestPath.FullName)"
+          $modulePath = $manifestPath.Directory.FullName
+          Write-Host "📂 Module path: $modulePath"
         } else {
-          Write-Warning 'NuGet API key not found. Skipping publish.'
+          Write-Error "❌ No module manifest (.psd1) file found in ./module"
+          exit 1
+        }
+        
+        # Check which tokens are available
+        Write-Host "🔑 Checking available authentication tokens..."
+        if ($env:GITHUB_TOKEN) {
+          Write-Host "✅ GITHUB_TOKEN is available"
+        } else {
+          Write-Host "❌ GITHUB_TOKEN is not available"
+        }
+        
+        if ($env:NUGET_API_KEY) {
+          Write-Host "✅ NUGET_API_KEY is available"
+        } else {
+          Write-Host "❌ NUGET_API_KEY is not available"
+        }
+        
+        # Use NuGet API Key if available, otherwise fall back to GitHub Token
+        $apiKey = if ($env:NUGET_API_KEY) { $env:NUGET_API_KEY } else { $env:GITHUB_TOKEN }
+        
+        if ($apiKey) {
+          Write-Host "📦 Publishing module from path: $modulePath"
+          try {
+            Publish-Module -Path $modulePath -Repository 'GitHubPackages' -NuGetApiKey $apiKey -Verbose
+            Write-Host "✅ Module published successfully!"
+          }
+          catch {
+            Write-Error "❌ Failed to publish module: $($_.Exception.Message)"
+            throw
+          }
+        } else {
+          Write-Error '❌ No authentication token found. Cannot publish.'
+          exit 1
         }
