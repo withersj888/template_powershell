@@ -205,18 +205,42 @@ jobs:
         $apiKey = if ($env:NUGET_API_KEY) { $env:NUGET_API_KEY } else { $env:GITHUB_TOKEN }
         
         if ($apiKey) {
-          Write-Host "📦 Publishing module from path: $modulePath"
+          Write-Host "📦 Publishing module using manifest path: $($manifestPath.FullName)"
           try {
-            Publish-Module -Path $modulePath -Repository 'GitHubPackages' -NuGetApiKey $apiKey -Verbose -Force
+            # Try publishing using the manifest file path directly
+            Publish-Module -Path $manifestPath.FullName -Repository 'GitHubPackages' -NuGetApiKey $apiKey -Verbose -Force
             Write-Host "✅ Module published successfully!"
           }
           catch {
-            Write-Error "❌ Failed to publish module: $($_.Exception.Message)"
-            Write-Host "🔍 Additional debugging information:"
-            Write-Host "  - Module path: $modulePath"
-            Write-Host "  - Manifest path: $($manifestPath.FullName)"
-            Write-Host "  - Repository: GitHubPackages"
-            throw
+            Write-Host "⚠️ Direct manifest publish failed, trying module directory..."
+            try {
+              # Alternative: Try with module directory path
+              Publish-Module -Path $modulePath -Repository 'GitHubPackages' -NuGetApiKey $apiKey -Verbose -Force
+              Write-Host "✅ Module published successfully via directory path!"
+            }
+            catch {
+              Write-Error "❌ Both publish attempts failed:"
+              Write-Error "  - Manifest path error: $($_.Exception.Message)"
+              Write-Host "🔍 Debugging information:"
+              Write-Host "  - Module path: $modulePath"
+              Write-Host "  - Manifest path: $($manifestPath.FullName)"
+              Write-Host "  - Repository: GitHubPackages"
+              Write-Host "  - Working directory: $(Get-Location)"
+              
+              # Try to get more details about the repository
+              try {
+                $repo = Get-PSRepository -Name 'GitHubPackages'
+                Write-Host "  - Repository details:"
+                Write-Host "    - Name: $($repo.Name)"
+                Write-Host "    - SourceLocation: $($repo.SourceLocation)"
+                Write-Host "    - PublishLocation: $($repo.PublishLocation)"
+              }
+              catch {
+                Write-Host "  - Could not retrieve repository details: $($_.Exception.Message)"
+              }
+              
+              throw
+            }
           }
         } else {
           Write-Error '❌ No authentication token found. Cannot publish.'
