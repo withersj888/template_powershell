@@ -128,7 +128,7 @@ jobs:
         # Check if repository already exists and remove it
         $existingRepo = Get-PSRepository -Name $repositoryName -ErrorAction SilentlyContinue
         if ($existingRepo) {
-          Unregister-PSRepository -Name $repositoryName -Confirm:$false
+          Unregister-PSRepository -Name $repositoryName -Force
         }
         
         # Register GitHub Packages as PowerShell repository
