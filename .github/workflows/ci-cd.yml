@@ -98,10 +98,13 @@ jobs:
         path: ./build
 
   publish:
-    name: Publish to PowerShell Gallery
+    name: Publish to GitHub Packages
     runs-on: ubuntu-latest
     needs: [build]
     if: github.event_name == 'release'
+    permissions:
+      contents: read
+      packages: write
     
     steps:
     - name: Download Build Artifact
@@ -110,13 +113,37 @@ jobs:
         name: TemplateModule
         path: ./module
       
-    - name: Publish Module
+    - name: Setup GitHub Packages Repository
       shell: pwsh
       env:
-        POWERSHELL_GALLERY_API_KEY: ${{ secrets.POWERSHELL_GALLERY_API_KEY }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        if ($env:POWERSHELL_GALLERY_API_KEY) {
-          Publish-Module -Path './module' -NuGetApiKey $env:POWERSHELL_GALLERY_API_KEY -Verbose
+        $repositoryName = 'GitHubPackages'
+        $sourceLocation = 'https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json'
+        
+        # Create credential for GitHub Packages
+        $secureToken = ConvertTo-SecureString $env:GITHUB_TOKEN -AsPlainText -Force
+        $credential = New-Object System.Management.Automation.PSCredential('${{ github.repository_owner }}', $secureToken)
+        
+        # Check if repository already exists and remove it
+        $existingRepo = Get-PSRepository -Name $repositoryName -ErrorAction SilentlyContinue
+        if ($existingRepo) {
+          Unregister-PSRepository -Name $repositoryName -Confirm:$false
+        }
+        
+        # Register GitHub Packages as PowerShell repository
+        Register-PSRepository -Name $repositoryName -SourceLocation $sourceLocation -PublishLocation $sourceLocation -InstallationPolicy Trusted -Credential $credential
+        
+    - name: Publish Module to GitHub Packages
+      shell: pwsh
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        if ($env:GITHUB_TOKEN) {
+          $secureToken = ConvertTo-SecureString $env:GITHUB_TOKEN -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential('${{ github.repository_owner }}', $secureToken)
+          
+          Publish-Module -Path './module' -Repository 'GitHubPackages' -Credential $credential -Verbose
         } else {
-          Write-Warning "PowerShell Gallery API key not found. Skipping publish."
+          Write-Warning 'GitHub token not found. Skipping publish.'
         }
