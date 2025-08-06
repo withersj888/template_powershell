@@ -143,7 +143,22 @@ jobs:
           $secureToken = ConvertTo-SecureString $env:GITHUB_TOKEN -AsPlainText -Force
           $credential = New-Object System.Management.Automation.PSCredential('${{ github.repository_owner }}', $secureToken)
           
-          Publish-Module -Path './module' -Repository 'GitHubPackages' -Credential $credential -Verbose
+        if ($env:GITHUB_TOKEN) {
+          # Create credential for GitHub Packages
+          $secureToken = ConvertTo-SecureString $env:GITHUB_TOKEN -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential('${{ github.repository_owner }}', $secureToken)
+          
+          # Check if repository already exists and remove it
+          $existingRepo = Get-PSRepository -Name $repositoryName -ErrorAction SilentlyContinue
+          if ($existingRepo) {
+            Unregister-PSRepository -Name $repositoryName -Confirm:$false
+          }
+          
+          # Register GitHub Packages as PowerShell repository
+          Register-PSRepository -Name $repositoryName -SourceLocation $sourceLocation -PublishLocation $sourceLocation -InstallationPolicy Trusted -Credential $credential
+          
+          # Publish the module
+          Publish-Module -Path './module' -Repository $repositoryName -Credential $credential -Verbose
         } else {
           Write-Warning 'GitHub token not found. Skipping publish.'
         }
