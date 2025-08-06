@@ -1,0 +1,122 @@
+name: PowerShell Module CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  test:
+    name: Test PowerShell Module
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        powershell-version: ['5.1', '7.x']
+        exclude:
+          - os: ubuntu-latest
+            powershell-version: '5.1'
+          - os: macos-latest
+            powershell-version: '5.1'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Pester
+      shell: pwsh
+      run: |
+        Set-PSRepository PSGallery -InstallationPolicy Trusted
+        Install-Module -Name Pester -Force -SkipPublisherCheck
+        
+    - name: Run Pester Tests
+      shell: pwsh
+      run: |
+        $testResults = Invoke-Pester -Path './tests' -OutputFormat NUnitXml -OutputFile 'testResults.xml' -PassThru
+        if ($testResults.FailedCount -gt 0) {
+          throw "Tests failed"
+        }
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ matrix.os }}-ps${{ matrix.powershell-version }}
+        path: testResults.xml
+
+  code-analysis:
+    name: Code Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        Set-PSRepository PSGallery -InstallationPolicy Trusted
+        Install-Module -Name PSScriptAnalyzer -Force
+        
+    - name: Run PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        $analysisResults = Invoke-ScriptAnalyzer -Path './src' -Recurse -ReportSummary
+        if ($analysisResults.Count -gt 0) {
+          $analysisResults | Format-Table
+          Write-Warning "PSScriptAnalyzer found $($analysisResults.Count) issues"
+        }
+
+  build:
+    name: Build Module
+    runs-on: ubuntu-latest
+    needs: [test, code-analysis]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Test Module Manifest
+      shell: pwsh
+      run: |
+        Test-ModuleManifest -Path './src/TemplateModule.psd1'
+        
+    - name: Create Build Artifact
+      shell: pwsh
+      run: |
+        $buildPath = './build'
+        New-Item -ItemType Directory -Path $buildPath -Force
+        Copy-Item -Path './src/*' -Destination $buildPath -Recurse
+        
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: TemplateModule
+        path: ./build
+
+  publish:
+    name: Publish to PowerShell Gallery
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'release'
+    
+    steps:
+    - name: Download Build Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: TemplateModule
+        path: ./module
+      
+    - name: Publish Module
+      shell: pwsh
+      env:
+        POWERSHELL_GALLERY_API_KEY: ${{ secrets.POWERSHELL_GALLERY_API_KEY }}
+      run: |
+        if ($env:POWERSHELL_GALLERY_API_KEY) {
+          Publish-Module -Path './module' -NuGetApiKey $env:POWERSHELL_GALLERY_API_KEY -Verbose
+        } else {
+          Write-Warning "PowerShell Gallery API key not found. Skipping publish."
+        }
