@@ -132,7 +132,7 @@ jobs:
         }
         
         # Register GitHub Packages as PowerShell repository
-        Register-PSRepository -Name $repositoryName -SourceLocation $sourceLocation -PublishLocation $sourceLocation -InstallationPolicy Trusted -Credential $credential
+        Register-PSRepository -Name $repositoryName -SourceLocation $sourceLocation -PublishLocation $sourceLocation -InstallationPolicy Trusted
         
     - name: Publish Module to GitHub Packages
       shell: pwsh
