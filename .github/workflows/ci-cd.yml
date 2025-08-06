@@ -140,6 +140,9 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         if ($env:GITHUB_TOKEN) {
+          $repositoryName = 'GitHubPackages'
+          $sourceLocation = 'https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json'
+          
           $secureToken = ConvertTo-SecureString $env:GITHUB_TOKEN -AsPlainText -Force
           $credential = New-Object System.Management.Automation.PSCredential('${{ github.repository_owner }}', $secureToken)
 
