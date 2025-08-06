@@ -137,26 +137,11 @@ jobs:
     - name: Publish Module to GitHub Packages
       shell: pwsh
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        NUGET_API_KEY: ${{ secrets.NuGetApiKey }}
       run: |
-        if ($env:GITHUB_TOKEN) {
-          $repositoryName = 'GitHubPackages'
-          $sourceLocation = 'https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json'
-          
-          $secureToken = ConvertTo-SecureString $env:GITHUB_TOKEN -AsPlainText -Force
-          $credential = New-Object System.Management.Automation.PSCredential('${{ github.repository_owner }}', $secureToken)
-
-          # Check if repository already exists and remove it
-          $existingRepo = Get-PSRepository -Name $repositoryName -ErrorAction SilentlyContinue
-          if ($existingRepo) {
-            Unregister-PSRepository -Name $repositoryName
-          }
-
-          # Register GitHub Packages as PowerShell repository
-          Register-PSRepository -Name $repositoryName -SourceLocation $sourceLocation -PublishLocation $sourceLocation -InstallationPolicy Trusted -Credential $credential
-
-          # Publish the module
-          Publish-Module -Path './module' -Repository $repositoryName -Credential $credential -Verbose
+        if ($env:NUGET_API_KEY) {
+          # Publish the module using NuGet API key
+          Publish-Module -Path './module' -Repository 'GitHubPackages' -NuGetApiKey $env:NUGET_API_KEY -Verbose
         } else {
-          Write-Warning 'GitHub token not found. Skipping publish.'
+          Write-Warning 'NuGet API key not found. Skipping publish.'
         }
