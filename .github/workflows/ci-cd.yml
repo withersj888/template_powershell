@@ -137,7 +137,7 @@ jobs:
     - name: Publish Module to GitHub Packages
       shell: pwsh
       env:
-        NUGET_API_KEY: ${{ secrets.NuGetApiKey }}
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
       run: |
         if ($env:NUGET_API_KEY) {
           # Publish the module using NuGet API key
