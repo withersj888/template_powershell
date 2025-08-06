@@ -79,9 +79,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Setup PowerShell
-      uses: actions/setup-powershell@v1
-      
     - name: Test Module Manifest
       shell: pwsh
       run: |
@@ -112,9 +109,6 @@ jobs:
       with:
         name: TemplateModule
         path: ./module
-        
-    - name: Setup PowerShell
-      uses: actions/setup-powershell@v1
       
     - name: Publish Module
       shell: pwsh
