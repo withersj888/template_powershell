@@ -147,13 +147,43 @@ jobs:
         }
         
         # Find the module manifest file
-        $manifestPath = Get-ChildItem -Path './module' -Filter '*.psd1' -Recurse | Select-Object -First 1
-        if ($manifestPath) {
-          Write-Host "📦 Found module manifest: $($manifestPath.FullName)"
-          $modulePath = $manifestPath.Directory.FullName
-          Write-Host "📂 Module path: $modulePath"
-        } else {
+        $manifestFiles = Get-ChildItem -Path './module' -Filter '*.psd1' -Recurse
+        Write-Host "📦 Found $($manifestFiles.Count) manifest file(s)"
+        
+        if ($manifestFiles.Count -eq 0) {
           Write-Error "❌ No module manifest (.psd1) file found in ./module"
+          exit 1
+        }
+        
+        $manifestPath = $manifestFiles[0]
+        Write-Host "📦 Using module manifest: $($manifestPath.FullName)"
+        
+        # Check if the manifest is directly in ./module or in a subdirectory
+        $modulePath = if ($manifestPath.Directory.Name -eq 'module') {
+          # Files are directly in ./module directory
+          $manifestPath.Directory.FullName
+        } else {
+          # Files are in a subdirectory within ./module
+          $manifestPath.Directory.FullName
+        }
+        
+        Write-Host "📂 Module path determined: $modulePath"
+        
+        # Validate the module path contains required files
+        $moduleFiles = Get-ChildItem -Path $modulePath -File
+        Write-Host "📋 Files in module path:"
+        $moduleFiles | ForEach-Object { Write-Host "  - $($_.Name)" }
+        
+        # Test the module manifest
+        try {
+          Write-Host "🔍 Testing module manifest..."
+          $manifest = Test-ModuleManifest -Path $manifestPath.FullName -ErrorAction Stop
+          Write-Host "✅ Module manifest is valid"
+          Write-Host "📋 Module Name: $($manifest.Name)"
+          Write-Host "📋 Module Version: $($manifest.Version)"
+        }
+        catch {
+          Write-Error "❌ Module manifest validation failed: $($_.Exception.Message)"
           exit 1
         }
         
@@ -177,11 +207,15 @@ jobs:
         if ($apiKey) {
           Write-Host "📦 Publishing module from path: $modulePath"
           try {
-            Publish-Module -Path $modulePath -Repository 'GitHubPackages' -NuGetApiKey $apiKey -Verbose
+            Publish-Module -Path $modulePath -Repository 'GitHubPackages' -NuGetApiKey $apiKey -Verbose -Force
             Write-Host "✅ Module published successfully!"
           }
           catch {
             Write-Error "❌ Failed to publish module: $($_.Exception.Message)"
+            Write-Host "🔍 Additional debugging information:"
+            Write-Host "  - Module path: $modulePath"
+            Write-Host "  - Manifest path: $($manifestPath.FullName)"
+            Write-Host "  - Repository: GitHubPackages"
             throw
           }
         } else {
